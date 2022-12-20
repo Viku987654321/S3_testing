@@ -1,0 +1,51 @@
+---
+version: 0.2
+env:
+  variables:
+    REGION: ap-south-1
+    AWS_ACCOUNTID: 259227109419
+    EKS_NAME: kod-staging-cluster
+    REPOSITORY_URI: ${AWS_ACCOUNTID}.dkr.ecr.${REGION}.amazonaws.com
+    AWS_ACCESS_KEY_ID: AKIATYWZDZAVR7N6XMAL
+    AWS_SECRET_ACCESS_KEY: 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
+    
+phases:
+  install:
+    commands:
+      - echo Installing Aws CLI library...
+      - apt-get update -y
+      - apt install -y awscli git python3
+      - python3 --version
+      - echo Python install completed
+      - echo Configuring Aws cli 
+      
+      - aws configure set region $REGION
+      - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+      - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+      
+      - curl -o aws-iam-authenticator
+        https://amazon-eks.s3.us-west-2.amazonaws.com/1.21.2/2021-07-05/bin/linux/amd64/aws-iam-authenticator
+      - chmod +x ./aws-iam-authenticator
+      - mkdir -p ~/bin && cp ./aws-iam-authenticator ~/bin/aws-iam-authenticator
+        && export PATH=~/bin:$PATH
+      - curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+      - chmod +x kubectl
+      - mv ./kubectl /usr/local/bin/kubectl
+  
+  pre_build:
+    commands:
+      - echo Update kubeconfig...
+      - aws --version
+      - kubectl version --client --output=yaml
+      
+      - aws sts get-caller-identity
+      - aws eks get-token --cluster-name ${EKS_NAME}
+      - aws eks update-kubeconfig --name ${EKS_NAME} --region ${REGION} --role-arn arn:aws:iam::259227109419:role/kod-build-pipeline-role
+      - cat /root/.kube/config
+      - kubectl auth can-i get svc
+      - kubectl cluster-info dump
+      - kubectl version
+      - echo kubectl install completed
+  post_build:
+    commands:
+      - echo Rollout new version
